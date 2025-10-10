@@ -8,7 +8,6 @@ from buttons import clock_time, choose_dict, menu_dict
 # import token
 from api import TOKEN
 
-
 bot = telebot.TeleBot(TOKEN)
 
 user_data = {}
@@ -16,11 +15,12 @@ user_data = {}
 #  обработка start
 @bot.message_handler(commands= ['start'])
 def send_greeting(message):
+    global user_data
     # get user's id
     user_id = message.from_user.id
     user_name = message.from_user.first_name
     username = message.from_user.username
-    user_data[user_id] = {'user_name': user_name, 'username': username}
+    user_data_updated = {'user_id': user_id,'user_name': user_name, 'username': username}
 
 
     #  создаем кнопки для выбора часового пояса
@@ -35,6 +35,7 @@ def send_greeting(message):
                                      '\nВыбери свой часовой пояс. И время когда хочешь получать данные.',
                      reply_markup=markup)
 
+    user_data = user_data_updated
     print(user_data)
 
 
@@ -63,9 +64,11 @@ def menu_buttons(call):
 
 
 
+user_zone = {}
 #  обрабатываем часовой пояс и выбираем когда юзер хочет получать данные
 @bot.callback_query_handler(func=lambda call: True)
 def obrabotka(call):
+    global user_zone
 
     time = time_now_f() #  получаем кортеж с часом и минутой (время мск)
     result_time_user = time[0]
@@ -86,7 +89,8 @@ def obrabotka(call):
         reply_markup=None)  # убираем клаву инлайн
 
     menu_buttons(call=call)
-    print(user_number)
+    user_zone = {'id_tg': call.from_user.id, 'zone': user_number}
+    print(user_zone)
         
 
 

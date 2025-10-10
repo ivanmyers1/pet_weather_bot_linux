@@ -1,5 +1,6 @@
 # pip install psycopg2-binary
 import psycopg2
+from gismeteo_bot import user_data, user_zone
 
 conn = psycopg2.connect(
     host="localhost",
@@ -23,25 +24,15 @@ def create_table_only_one_time():
     # CREATE TABLE time_zone
     cursor.execute("""
     CREATE TABLE time_zone(
-    id SERIAL PRIMARY KEY,
-    id_tg INTEGER REFERENCES users(id_tg) NOT NULL,
+    id_tg INTEGER PRIMARY KEY REFERENCES users(id_tg) NOT NULL,
     zone_code INTEGER NOT NULL)
     
     
     """)
     conn.commit()
 
-create_table_only_one_time()
+#create_table_only_one_time()
 
-def add_info_to_tables(table,id_tg,name,user_name, zone):
-    if table == 1 or table == 3:
-        cursor.execute("""
-        INSERT INTO users(id_tg, name, user_name) VALUES(%s,%s,%s)
-        """, (id_tg,f'{name}',f'{user_name}'))
-    if table == 2 or table == 3:
-        cursor.execute("""
-        INSERT INTO time_zone(id_tg, zone_code) VALUES(%s,%s)
-        """, (id_tg,zone))
-    conn.commit()
-#add_info_to_tables(2,123,0,0,2)
 
+def add_info_about_user_to_tables(id_tg=user_data.id_tg, name=user_data.user_name, user_name=user_data.username, zone=user_zone.zone, zone_id=user_zone.id_tg):
+    print(f"bd's working {id_tg}")
