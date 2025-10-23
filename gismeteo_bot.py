@@ -1,3 +1,5 @@
+# pip install psycopg2-binary
+import psycopg2
 import telebot
 import datetime
 from telebot.types import (InlineKeyboardMarkup, KeyboardButton, InlineKeyboardButton, ReplyKeyboardRemove,
@@ -10,20 +12,25 @@ from api import TOKEN
 
 bot = telebot.TeleBot(TOKEN)
 
-user_data = {}
+# work with BD
+conn = psycopg2.connect(
+    host="localhost",
+    port=5432,
+    database="postgres",
+    user="postgres",
+    password="postgres"
+)
+cursor = conn.cursor()
+
+
+
+
+
 
 #  обработка start
 @bot.message_handler(commands= ['start'])
 def send_greeting(message):
-    global user_data
-    # get user's id
-    user_id = message.from_user.id
-    user_name = message.from_user.first_name
-    username = message.from_user.username
-    user_data_updated = {'user_id': user_id,'user_name': user_name, 'username': username}
-
-
-    #  создаем кнопки для выбора часового пояса
+    # создаем кнопки для выбора часового пояса
     markup = InlineKeyboardMarkup(row_width=3)  # создание инлайн клавиатуры (3 кнопки в одном ряду)
     buttons = []
     for callback_data, text in clock_time.items():
@@ -34,9 +41,6 @@ def send_greeting(message):
     bot.send_message(message.chat.id,'Приветствую, я помогу узнать погоду в определенное время или в данный момент!'
                                      '\nВыбери свой часовой пояс. И время когда хочешь получать данные.',
                      reply_markup=markup)
-
-    user_data = user_data_updated
-    print(user_data)
 
 
 
@@ -64,11 +68,10 @@ def menu_buttons(call):
 
 
 
-user_zone = {}
+
 #  обрабатываем часовой пояс и выбираем когда юзер хочет получать данные
 @bot.callback_query_handler(func=lambda call: True)
 def obrabotka(call):
-    global user_zone
 
     time = time_now_f() #  получаем кортеж с часом и минутой (время мск)
     result_time_user = time[0]
@@ -89,19 +92,49 @@ def obrabotka(call):
         reply_markup=None)  # убираем клаву инлайн
 
     menu_buttons(call=call)
+
+    user_id = call.from_user.id
+    user_name = call.from_user.first_name
+    username = call.from_user.username
+    user_data = {'user_id': user_id, 'user_name': user_name, 'username': username}
+
     user_zone = {'id_tg': call.from_user.id, 'zone': user_number}
-    print(user_zone)
+    print(user_data, user_zone)
+    add_info_about_user_to_tables(user_data=user_data,user_zone=user_zone)
         
 
+def add_info_about_user_to_tables(user_data,user_zone):
+    cursor.execute("""
+    SELECT 1 FROM users WHERE id_tg = %s
+    """, (user_data['user_id'],))
+    result = cursor.fetchone()
 
+    if result is None:
+        cursor.execute("""
+        INSERT INTO users (id_tg,name,user_name) VALUES(%s,%s,%s)
+        """,(user_data['user_id'], user_data['user_name'], user_data['username']))
+        conn.commit()
 
+        cursor.execute("""
+            INSERT INTO time_zone (id_tg,zone_code) VALUES(%s,%s)
+            """, (user_zone['id_tg'], user_zone['zone']))
+        conn.commit()
+
+    else:
+        cursor.execute("""
+        UPDATE users SET name=%s, user_name=%s where id_tg=%s 
+        """, (user_data['user_name'], user_data['username'], user_data['user_id']))
+        conn.commit()
+
+        cursor.execute("""
+        UPDATE time_zone SET zone_code=%s where id_tg=%s 
+        """, (user_zone['zone'], user_zone['id_tg']))
+        conn.commit()
 
 
 
 print("bot's working")
 #  запуск сервера
 bot.infinity_polling()
-
-
 
 
