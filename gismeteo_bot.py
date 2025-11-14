@@ -1,12 +1,12 @@
 # pip install psycopg2-binary
 import psycopg2
 import telebot
-import datetime
+from datetime import datetime
 from telebot.types import (InlineKeyboardMarkup, KeyboardButton, InlineKeyboardButton, ReplyKeyboardRemove,
                            ReplyKeyboardMarkup)  # кнопки для ответа
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 # import  buttons
-from buttons import clock_time, choose_dict, menu_dict
+from buttons import clock_time, menu_dict, confirm_button
 # import token
 from api import TOKEN
 
@@ -47,7 +47,7 @@ def send_greeting(message):
 
 #  получаем время (только час)
 def time_now_f():
-    current_time = datetime.datetime.now() #  2025-06-30 17:09:28.853964
+    current_time = datetime.now() #  2025-06-30 17:09:28.853964
     time_now = current_time.time() #  17:09:28.853964
     time_hour = time_now.hour # 17
     time_minute = time_now.minute #  09
@@ -56,7 +56,9 @@ def time_now_f():
 
     return time_hour, time_minute #  возвращаем кортеж с часом и минутами
 
-
+# здесь надо дописать логику, если часовой пояс был выбран то пользователь может использзовать команду menu и инфа о времени
+# будет браться оттуда сюда, а не из функции start
+@bot.message_handler(commands= ['menu'])
 def menu_buttons(call):
     markup = InlineKeyboardMarkup(row_width=1)
     for button_text, but_data in menu_dict.items():
@@ -70,7 +72,7 @@ def menu_buttons(call):
 
 
 #  обрабатываем часовой пояс и выбираем когда юзер хочет получать данные
-@bot.callback_query_handler(func=lambda call: True)
+@bot.callback_query_handler(func=lambda call: call.data.isdigit())
 def obrabotka(call):
 
     time = time_now_f() #  получаем кортеж с часом и минутой (время мск)
@@ -88,7 +90,7 @@ def obrabotka(call):
     bot.edit_message_text(
         chat_id=call.message.chat.id,
         message_id=call.message.message_id,
-        text=f'Отлично, у вас сейчас {result_time_user}:{minute}',  # редактируем сообщение
+        text=f'Часовой пояс выбран, у вас сейчас {result_time_user}:{minute}',  # редактируем сообщение
         reply_markup=None)  # убираем клаву инлайн
 
     menu_buttons(call=call)
@@ -131,7 +133,112 @@ def add_info_about_user_to_tables(user_data,user_zone):
         """, (user_zone['zone'], user_zone['id_tg']))
         conn.commit()
 
+@bot.callback_query_handler(func=lambda call: call.data == "menu_time")
+def handle_time(call):
 
+    bot.edit_message_text(
+                    chat_id=call.message.chat.id,
+                    message_id=call.message.message_id,
+                    text='Напишите время когда хотели бы получать данные.\n\nНапример: 07:05,12:05,13:30, 15:50, 00:00, 03:10'
+    )
+
+
+@bot.message_handler(content_types=['text'])
+def handle_text(message):
+    message = message
+
+    def filter_time(text):
+        able_chars = []
+        for n in range(0, 10):
+            able_chars.append(str(n))
+        able_chars.append(":")
+        # print(able_chars)
+
+        filtred_chars = []
+        for n in text:
+            if n in able_chars:
+                filtred_chars.append(n)
+        filter_time_text = ''.join(filtred_chars)
+        print(filter_time_text)
+        return filter_time_text
+
+
+    def get_time():
+        data_text = filter_time(text=message.text)
+        is_time = False
+        time_ = []  # ['07:05', '12:05', '13:30']
+        block_size = 4
+
+        for n in range(len(data_text) - block_size):
+            window_check = data_text[n:n + block_size + 1]
+
+            # проверка на читаемость времени
+            try:
+                if datetime.strptime(window_check, '%H:%M'):
+                    time_.append(window_check)
+                    is_time = True
+
+            except ValueError:
+                continue
+
+        return (time_, is_time)
+
+    send_time_handle_f = get_time()[0]
+    print(f"Пользователь написал время отправки: {get_time()[0]}")
+
+    # пользователь написал верное время
+    if get_time()[1]:
+        markup = InlineKeyboardMarkup(row_width=1)
+        for button_text, but_data in confirm_button.items():
+                markup.add(InlineKeyboardButton(button_text, callback_data=but_data))
+
+        bot.send_message(
+            chat_id=message.chat.id,
+            text=f'Подтвердите выбраное время: {get_time()[0]}\nИли если что-то не вывелось, напишите еще раз в правильном формате',
+            reply_markup=markup
+        )
+
+    # пользователь написал время неправильно
+    elif not get_time()[1]:
+        bot.send_message(
+            chat_id=message.chat.id,
+            text='Извините я вас не понимаю. Мой создатель не наделил меня способностью поддерживать диалог.\n'
+                 'Если Вы хотели выбрать время отправки, то его следует писать полностью.\n\n'
+                 'Например: 07:10, 12:30, 23:59, 00:00'
+        )
+
+    send_time = send_time_handle_f
+
+    @bot.callback_query_handler(func=lambda call: call.data == "confirm_button_access")
+    def handler_confirm_button(call=message):
+        id_tg = call.from_user.id
+
+        cursor.execute("""
+            SELECT 1 FROM send_time WHERE id_tg = %s
+            """, (id_tg,))
+        result = cursor.fetchone()
+
+        if result is None:
+            #print(f'we are into handler conf but {id_tg, send_time}')
+            cursor.execute('''
+            INSERT INTO send_time(id_tg, send_time) VALUES(%s,%s)
+            ''', (id_tg, send_time))
+            conn.commit()
+            print('information was send')
+
+        elif result is not None: # result == (1,)
+            cursor.execute("""
+                    UPDATE send_time SET send_time=%s where id_tg=%s 
+                    """, (send_time,id_tg))
+            conn.commit()
+            print('information was update')
+
+# закончил на добавлении в базу времени отпралвения. есть ошибка с обновлением данных после ввода, то есть данные тупо не обновляются. нужно решить это
+
+# далее написать корректор времени отправки
+
+class SenderOfWeatherMessages:
+    pass
 
 print("bot's working")
 #  запуск сервера
