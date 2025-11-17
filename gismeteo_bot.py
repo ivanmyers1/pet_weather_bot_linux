@@ -143,6 +143,8 @@ def handle_time(call):
     )
 
 
+test_dict = {}
+
 @bot.message_handler(content_types=['text'])
 def handle_text(message):
     message = message
@@ -159,7 +161,7 @@ def handle_text(message):
             if n in able_chars:
                 filtred_chars.append(n)
         filter_time_text = ''.join(filtred_chars)
-        print(filter_time_text)
+        #print(filter_time_text)
         return filter_time_text
 
 
@@ -183,7 +185,7 @@ def handle_text(message):
 
         return (time_, is_time)
 
-    send_time_handle_f = get_time()[0]
+    send_time = get_time()[0]
     print(f"Пользователь написал время отправки: {get_time()[0]}")
 
     # пользователь написал верное время
@@ -207,31 +209,38 @@ def handle_text(message):
                  'Например: 07:10, 12:30, 23:59, 00:00'
         )
 
-    send_time = send_time_handle_f
+    test_dict[message.from_user.id] = send_time
 
-    @bot.callback_query_handler(func=lambda call: call.data == "confirm_button_access")
-    def handler_confirm_button(call=message):
-        id_tg = call.from_user.id
 
+
+
+
+@bot.callback_query_handler(func=lambda call: call.data == "confirm_button_access")
+def handler_confirm_button(call):
+    id_tg = call.from_user.id
+    send_time = test_dict[id_tg]
+
+    cursor.execute("""
+        SELECT 1 FROM send_time WHERE id_tg = %s
+        """, (id_tg,))
+    result = cursor.fetchone()
+
+    if result is None:
+        #print(f'we are into handler conf but {id_tg, send_time}')
+        cursor.execute('''
+        INSERT INTO send_time(id_tg, send_time) VALUES(%s,%s)
+        ''', (id_tg, send_time))
+        conn.commit()
+        print('information was send')
+
+    elif result is not None: # result == (1,)
         cursor.execute("""
-            SELECT 1 FROM send_time WHERE id_tg = %s
-            """, (id_tg,))
-        result = cursor.fetchone()
+                UPDATE send_time SET send_time=%s where id_tg=%s
+                """, (send_time,id_tg))
+        conn.commit()
+        print(f'information was update, time is {send_time}')
 
-        if result is None:
-            #print(f'we are into handler conf but {id_tg, send_time}')
-            cursor.execute('''
-            INSERT INTO send_time(id_tg, send_time) VALUES(%s,%s)
-            ''', (id_tg, send_time))
-            conn.commit()
-            print('information was send')
-
-        elif result is not None: # result == (1,)
-            cursor.execute("""
-                    UPDATE send_time SET send_time=%s where id_tg=%s 
-                    """, (send_time,id_tg))
-            conn.commit()
-            print('information was update')
+    test_dict.clear()
 
 # закончил на добавлении в базу времени отпралвения. есть ошибка с обновлением данных после ввода, то есть данные тупо не обновляются. нужно решить это
 
