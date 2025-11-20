@@ -1,7 +1,9 @@
 # pip install psycopg2-binary
+import time
+
 import psycopg2
 import telebot
-from datetime import datetime
+from datetime import datetime, UTC, timedelta
 from telebot.types import (InlineKeyboardMarkup, KeyboardButton, InlineKeyboardButton, ReplyKeyboardRemove,
                            ReplyKeyboardMarkup)  # кнопки для ответа
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
@@ -9,6 +11,7 @@ from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 from buttons import clock_time, menu_dict, confirm_button
 # import token
 from api import TOKEN
+import asyncio
 
 bot = telebot.TeleBot(TOKEN)
 
@@ -21,10 +24,6 @@ conn = psycopg2.connect(
     password="postgres"
 )
 cursor = conn.cursor()
-
-
-
-
 
 
 #  обработка start
@@ -41,8 +40,6 @@ def send_greeting(message):
     bot.send_message(message.chat.id,'Приветствую, я помогу узнать погоду в определенное время или в данный момент!'
                                      '\nВыбери свой часовой пояс. И время когда хочешь получать данные.',
                      reply_markup=markup)
-
-
 
 
 #  получаем время (только час)
@@ -67,7 +64,6 @@ def menu_buttons(call):
         elif but_data['type'] == 'url':
             markup.add(InlineKeyboardButton(button_text, url=but_data['data']))
     bot.send_message(call.message.chat.id, text='Меню:', reply_markup=markup)
-
 
 
 
@@ -144,7 +140,6 @@ def handle_time(call):
 
 
 test_dict = {}
-
 @bot.message_handler(content_types=['text'])
 def handle_text(message):
     message = message
@@ -208,10 +203,8 @@ def handle_text(message):
                  'Если Вы хотели выбрать время отправки, то его следует писать полностью.\n\n'
                  'Например: 07:10, 12:30, 23:59, 00:00'
         )
-
+    # обновление словаря
     test_dict[message.from_user.id] = send_time
-
-
 
 
 
@@ -240,14 +233,34 @@ def handler_confirm_button(call):
         conn.commit()
         print(f'information was update, time is {send_time}')
 
-    test_dict.clear()
+# далее написать чекер времени (нужно ли отправить данные сейчас)
 
-# закончил на добавлении в базу времени отпралвения. есть ошибка с обновлением данных после ввода, то есть данные тупо не обновляются. нужно решить это
 
-# далее написать корректор времени отправки
+send_time = {}
+list_of_id = []
+def test():
 
-class SenderOfWeatherMessages:
-    pass
+    def moscow_time():
+        add_time = timedelta(hours=3)
+        utc_time = datetime.now(UTC)
+        moscow_time = utc_time + add_time
+        return moscow_time.time().strftime('%H:%M')
+
+
+    def get_send_time_of_the_user():
+        cursor.execute('''
+        SELECT * FROM send_time;
+        ''')
+        result = cursor.fetchall()
+        # наполняем send time данными из кортежа
+        for key, value in result:
+            send_time[key] = value
+            list_of_id.append(key)
+        send_time.update(send_time)
+
+        return list_of_id,send_time
+
+
 
 print("bot's working")
 #  запуск сервера
