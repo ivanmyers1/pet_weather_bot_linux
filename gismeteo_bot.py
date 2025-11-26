@@ -207,11 +207,51 @@ def handle_text(message):
     test_dict[message.from_user.id] = send_time
 
 
-
+# добавление времени в БД
 @bot.callback_query_handler(func=lambda call: call.data == "confirm_button_access")
 def handler_confirm_button(call):
     id_tg = call.from_user.id
     send_time = test_dict[id_tg]
+
+    def success_message():
+        sep = '--'
+        text = []
+        n = 6
+
+        # text filling
+        def filling_dict():
+            for num in range(n):
+                if num + 1 == n:
+                    text.append(sep)
+                    text.append(str(num))
+                    text.append(sep)
+                    break
+
+                if num != n:
+                    text.append(sep)
+                    text.append(str(num))
+            text.reverse()
+            text_ = ''.join(text)
+            return text_
+
+        func_text = filling_dict()
+
+        def window_slider(text_=None):
+            if text_ is None:
+                text_ = func_text
+            block_size = 5
+            for num in range(len(text_) - 4):
+                bot.edit_message_text(chat_id=id_tg, message_id=call.message.message_id,
+                                      text=f'Время было успешно добавлено.({text_[num:num + block_size]})')
+                time.sleep(0.25)
+
+            bot.delete_message(chat_id=id_tg, message_id=call.message.message_id)
+            menu_buttons(call=call)
+
+        # start the function
+        window_slider()
+
+
 
     cursor.execute("""
         SELECT 1 FROM send_time WHERE id_tg = %s
@@ -224,6 +264,7 @@ def handler_confirm_button(call):
         INSERT INTO send_time(id_tg, send_time) VALUES(%s,%s)
         ''', (id_tg, send_time))
         conn.commit()
+        success_message()
         print('information was send')
 
     elif result is not None: # result == (1,)
@@ -231,35 +272,20 @@ def handler_confirm_button(call):
                 UPDATE send_time SET send_time=%s where id_tg=%s
                 """, (send_time,id_tg))
         conn.commit()
+        success_message()
         print(f'information was update, time is {send_time}')
 
 # далее написать чекер времени (нужно ли отправить данные сейчас)
+# чекер написал. он работает в файле sender weather
 
-
-send_time = {}
-list_of_id = []
-def test():
-
-    def moscow_time():
-        add_time = timedelta(hours=3)
-        utc_time = datetime.now(UTC)
-        moscow_time = utc_time + add_time
-        return moscow_time.time().strftime('%H:%M')
-
-
-    def get_send_time_of_the_user():
-        cursor.execute('''
-        SELECT * FROM send_time;
-        ''')
-        result = cursor.fetchall()
-        # наполняем send time данными из кортежа
-        for key, value in result:
-            send_time[key] = value
-            list_of_id.append(key)
-        send_time.update(send_time)
-
-        return list_of_id,send_time
-
+# добавление места в БД
+@bot.callback_query_handler(func=lambda call: call.data == "menu_location")
+def handler_choose_location(call):
+    bot.edit_message_text(
+        chat_id=call.from_user.id,
+        message_id=call.message.message_id,
+        text= 'Введите место о котором хотели бы получать информацию. '
+    )
 
 
 print("bot's working")
