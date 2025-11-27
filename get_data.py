@@ -1,6 +1,4 @@
 import requests
-from bs4 import BeautifulSoup
-import re
 import json
 from api import weather_api
 import psycopg2
@@ -14,18 +12,6 @@ conn = psycopg2.connect(
 )
 cursor = conn.cursor()
 
-def gismeteo_parsing():
-    url = 'https://www.gismeteo.ru/'
-    headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        }
-
-    response = requests.get(url, headers=headers)
-    soup = BeautifulSoup(response.text, 'html.parser')
-    head = soup.find('script')
-    head = str(head)
-    from_json = json.dumps(str(head))
-    print(head)
 
 def get_location_from_bd(id_tg):
     cursor.execute("""
@@ -37,8 +23,6 @@ def get_location_from_bd(id_tg):
     return result_location
 
 
-
-
 def open_weather_api(user_input):
     api = weather_api
     # city = input('в каком городе хочешь увидеть погоду: ')
@@ -48,7 +32,6 @@ def open_weather_api(user_input):
     data_dict = json.loads(response)
 
     return data_dict
-
 
 
 def format(id_tg_format):
@@ -72,18 +55,18 @@ def format(id_tg_format):
     return get_info
 
 
+# DRAFT
+# def does_location_exist():
+#     data = format()
+#     # don't have a data
+#     if data['Температура'] == 'Н/Д':
+#         return False
+#     # have a data
+#     else:
+#         return True
 
-def does_location_exist():
-    data = format()
-    # don't have a data
-    if data['Температура'] == 'Н/Д':
-        return False
-    # have a data
-    else:
-        return True
 
 
-
-print(format(901304271))
+# print(format(901304271))
 # print(open_weather_api())
 

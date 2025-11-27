@@ -379,62 +379,6 @@ def handler_choose_location(call):
         message_id=call.message.message_id,
         text= 'Введите место о котором хотели бы получать информацию. '
     )
-    message_text = call
-    def location(text=message_text):
-        def open_weather_api():
-            api = weather_api
-            city = str(input('в каком городе хочешь увидеть погоду: '))
-            call_ = f'http://api.openweathermap.org/data/2.5/weather?q={city}&lang=ru&appid={api}&units=metric'
-            response = requests.get(call_).text
-            data_dict = json.loads(response)
-
-            return data_dict, city
-
-        def format():
-            # dict_ = dict({'coord': {'lon': 33.2799, 'lat': 60.4915}, 'weather': [{'id': 804, 'main': 'Clouds', 'description': 'пасмурно', 'icon': '04n'}], 'base': 'stations', 'main': {'temp': 0.63, 'feels_like': -3.06, 'temp_min': 0.63, 'temp_max': 0.63, 'pressure': 1016, 'humidity': 96, 'sea_level': 1016, 'grnd_level': 1014}, 'visibility': 10000, 'wind': {'speed': 3.38, 'deg': 204, 'gust': 9.4}, 'clouds': {'all': 100}, 'dt': 1763918600, 'sys': {'country': 'RU', 'sunrise': 1763878078, 'sunset': 1763902738}, 'timezone': 10800, 'id': 534560, 'name': 'Рекиничи', 'cod': 200})
-            dict_ = open_weather_api()[0]
-            get_info = {
-                'Описание': dict_.get('weather', [{}])[0].get('description', 'Н/Д'),
-                'Температура': dict_.get('main', {}).get('temp', 'Н/Д'),
-                'Ощущается как': dict_.get('main', {}).get('feels_like', 'Н/Д'),
-                'Влажность': dict_.get('main', {}).get('humidity', 'Н/Д'),
-                'Давление': dict_.get('main', {}).get('pressure', 'Н/Д'),
-                'Видимость': dict_.get('visibility', 'Н/Д'),
-                'Облачность': dict_.get('clouds', {}).get('all', 'Н/Д'),
-                'Ветер': {
-                    'Скорость': dict_.get('wind', {}).get('speed', 'Н/Д'),
-                    'Направление': dict_.get('wind', {}).get('deg', 'Н/Д'),
-                    'Порыв': dict_.get('wind', {}).get('gust', 'Н/Д')
-                    # конструкция идентична dict_['wind']['gust'] но с дополнительной проверкой на наличие данных
-                },
-
-            }
-            return get_info
-
-        def does_location_exist():
-            data = format()
-            # don't have a data
-            if data['Температура'] == 'Н/Д':
-                return False
-            # have a data
-            else:
-                return True
-
-        def add_location_to_bd(location_=open_weather_api()[1], id_tg= id_tg_, does_exist=does_location_exist()):
-            if does_exist:
-                print(id_tg, location_)
-                # cursor.execute('''
-                # INSERT INTO send_location(id_tg, location) VALUES(%s,%s)
-                # ''', (id_tg, location_))
-
-                # нужно добавить изменение
-
-        def filter_location():
-            return text
-
-        return filter_location()
-
-    print(location())
 
 
 print("bot's working")
