@@ -1,11 +1,15 @@
 # pip install psycopg2-binary
 import time
 
+import json
+import requests
+from bs4 import BeautifulSoup
+from api import weather_api
+
 import psycopg2
 import telebot
 from datetime import datetime, UTC, timedelta
-from telebot.types import (InlineKeyboardMarkup, KeyboardButton, InlineKeyboardButton, ReplyKeyboardRemove,
-                           ReplyKeyboardMarkup)  # кнопки для ответа
+
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 # import  buttons
 from buttons import clock_time, menu_dict, confirm_button
@@ -139,11 +143,18 @@ def handle_time(call):
     )
 
 
+
+
+
 test_dict = {}
+location_dict = {}
 @bot.message_handler(content_types=['text'])
 def handle_text(message):
-    message = message
 
+    message_text = message.text
+    id_tg_ = message.chat.id
+
+    # проверка на ввод времени
     def filter_time(text):
         able_chars = []
         for n in range(0, 10):
@@ -161,7 +172,7 @@ def handle_text(message):
 
 
     def get_time():
-        data_text = filter_time(text=message.text)
+        data_text = filter_time(text=message_text)
         is_time = False
         time_ = []  # ['07:05', '12:05', '13:30']
         block_size = 4
@@ -178,10 +189,57 @@ def handle_text(message):
             except ValueError:
                 continue
 
-        return (time_, is_time)
+        return time_, is_time
 
     send_time = get_time()[0]
-    print(f"Пользователь написал время отправки: {get_time()[0]}")
+    # print(f"Пользователь написал время отправки: {get_time()[0]}")
+
+
+    # проверка на ввод города
+    def is_it_city():
+        def open_weather_api():
+            api = weather_api
+            city = str(message_text)
+            call_ = f'http://api.openweathermap.org/data/2.5/weather?q={city}&lang=ru&appid={api}&units=metric'
+            response = requests.get(call_).text
+            data_dict = json.loads(response)
+
+            return data_dict, city
+
+        def format():
+            data = open_weather_api()
+            dict_ = data[0]
+            city = data[1]
+            get_info = {
+                'Описание': dict_.get('weather', [{}])[0].get('description', 'Н/Д'),
+                'Температура': dict_.get('main', {}).get('temp', 'Н/Д'),
+                'Ощущается как': dict_.get('main', {}).get('feels_like', 'Н/Д'),
+                'Влажность': dict_.get('main', {}).get('humidity', 'Н/Д'),
+                'Давление': dict_.get('main', {}).get('pressure', 'Н/Д'),
+                'Видимость': dict_.get('visibility', 'Н/Д'),
+                'Облачность': dict_.get('clouds', {}).get('all', 'Н/Д'),
+                'Ветер': {
+                    'Скорость': dict_.get('wind', {}).get('speed', 'Н/Д'),
+                    'Направление': dict_.get('wind', {}).get('deg', 'Н/Д'),
+                    'Порыв': dict_.get('wind', {}).get('gust', 'Н/Д')
+                    # конструкция идентична dict_['wind']['gust'] но с дополнительной проверкой на наличие данных
+                },
+
+            }
+            return get_info, city
+
+        def does_location_exist():
+            data_dict = format()[0]
+            city_send = format()[1]
+            # don't have a data
+            if data_dict['Температура'] == 'Н/Д':
+                return False, city_send
+            # have a data
+            else:
+                return True, city_send
+
+        # запуск всех функций проверки
+        return does_location_exist()
 
     # пользователь написал верное время
     if get_time()[1]:
@@ -197,6 +255,39 @@ def handle_text(message):
 
     # пользователь написал время неправильно
     elif not get_time()[1]:
+        location_data = is_it_city()
+
+        # если введен город
+        if location_data[0]:
+            city = location_data[1]
+
+            # если данных города не существует то добавим в таблицу, в противном случае изменим
+            cursor.execute("""
+                SELECT 1 FROM send_location WHERE id_tg = %s
+                """, (id_tg_,))
+            result = cursor.fetchone()
+
+            if result is None:
+                cursor.execute("""
+                        INSERT INTO send_location (id_tg, location) VALUES(%s,%s)
+                        """, (id_tg_, city))
+                conn.commit()
+
+            else:
+                cursor.execute("""
+                        UPDATE send_location SET location=%s where id_tg=%s 
+                        """, (city, id_tg_))
+                conn.commit()
+
+
+
+            print(id_tg_, city )
+
+        else:
+            bot.send_message(chat_id=message.chat.id,
+            text='К сожалению нет такого местоположения с данными'
+                             )
+
         bot.send_message(
             chat_id=message.chat.id,
             text='Извините я вас не понимаю. Мой создатель не наделил меня способностью поддерживать диалог.\n'
@@ -205,6 +296,7 @@ def handle_text(message):
         )
     # обновление словаря
     test_dict[message.from_user.id] = send_time
+
 
 
 # добавление времени в БД
@@ -281,11 +373,69 @@ def handler_confirm_button(call):
 # добавление места в БД
 @bot.callback_query_handler(func=lambda call: call.data == "menu_location")
 def handler_choose_location(call):
+    id_tg_ = call.from_user.id
+
     bot.edit_message_text(
         chat_id=call.from_user.id,
         message_id=call.message.message_id,
         text= 'Введите место о котором хотели бы получать информацию. '
     )
+    message_text = call
+    def location(text=message_text):
+        def open_weather_api():
+            api = weather_api
+            city = str(input('в каком городе хочешь увидеть погоду: '))
+            call_ = f'http://api.openweathermap.org/data/2.5/weather?q={city}&lang=ru&appid={api}&units=metric'
+            response = requests.get(call_).text
+            data_dict = json.loads(response)
+
+            return data_dict, city
+
+        def format():
+            # dict_ = dict({'coord': {'lon': 33.2799, 'lat': 60.4915}, 'weather': [{'id': 804, 'main': 'Clouds', 'description': 'пасмурно', 'icon': '04n'}], 'base': 'stations', 'main': {'temp': 0.63, 'feels_like': -3.06, 'temp_min': 0.63, 'temp_max': 0.63, 'pressure': 1016, 'humidity': 96, 'sea_level': 1016, 'grnd_level': 1014}, 'visibility': 10000, 'wind': {'speed': 3.38, 'deg': 204, 'gust': 9.4}, 'clouds': {'all': 100}, 'dt': 1763918600, 'sys': {'country': 'RU', 'sunrise': 1763878078, 'sunset': 1763902738}, 'timezone': 10800, 'id': 534560, 'name': 'Рекиничи', 'cod': 200})
+            dict_ = open_weather_api()[0]
+            get_info = {
+                'Описание': dict_.get('weather', [{}])[0].get('description', 'Н/Д'),
+                'Температура': dict_.get('main', {}).get('temp', 'Н/Д'),
+                'Ощущается как': dict_.get('main', {}).get('feels_like', 'Н/Д'),
+                'Влажность': dict_.get('main', {}).get('humidity', 'Н/Д'),
+                'Давление': dict_.get('main', {}).get('pressure', 'Н/Д'),
+                'Видимость': dict_.get('visibility', 'Н/Д'),
+                'Облачность': dict_.get('clouds', {}).get('all', 'Н/Д'),
+                'Ветер': {
+                    'Скорость': dict_.get('wind', {}).get('speed', 'Н/Д'),
+                    'Направление': dict_.get('wind', {}).get('deg', 'Н/Д'),
+                    'Порыв': dict_.get('wind', {}).get('gust', 'Н/Д')
+                    # конструкция идентична dict_['wind']['gust'] но с дополнительной проверкой на наличие данных
+                },
+
+            }
+            return get_info
+
+        def does_location_exist():
+            data = format()
+            # don't have a data
+            if data['Температура'] == 'Н/Д':
+                return False
+            # have a data
+            else:
+                return True
+
+        def add_location_to_bd(location_=open_weather_api()[1], id_tg= id_tg_, does_exist=does_location_exist()):
+            if does_exist:
+                print(id_tg, location_)
+                # cursor.execute('''
+                # INSERT INTO send_location(id_tg, location) VALUES(%s,%s)
+                # ''', (id_tg, location_))
+
+                # нужно добавить изменение
+
+        def filter_location():
+            return text
+
+        return filter_location()
+
+    print(location())
 
 
 print("bot's working")
