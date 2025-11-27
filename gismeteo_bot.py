@@ -367,8 +367,7 @@ def handler_confirm_button(call):
         success_message()
         print(f'information was update, time is {send_time}')
 
-# далее написать чекер времени (нужно ли отправить данные сейчас)
-# чекер написал. он работает в файле sender weather
+
 
 # добавление места в БД
 @bot.callback_query_handler(func=lambda call: call.data == "menu_location")

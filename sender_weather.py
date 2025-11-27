@@ -3,7 +3,7 @@ import time
 import psycopg2
 import telebot
 from api import TOKEN
-
+from get_data import format
 conn = psycopg2.connect(
     host="localhost",
     port=5432,
@@ -57,7 +57,7 @@ def test():
                             # print(f'{id_=} {window=} {moscow_time()}')
                             if window == moscow_time():
                                 print(f'sending data to {id_}, time: {moscow_time()}')
-                                bot.send_message(chat_id=id_,text='you got data in time')
+                                bot.send_message(chat_id=id_,text=f'{format(id_)}')
                                 continue
                             else:
                                 print('no users for send')
